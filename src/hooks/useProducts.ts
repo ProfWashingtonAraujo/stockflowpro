@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Movement, Product } from '../types'
+import { apiFetch } from '../lib/api'
 
 type DashboardSummary = {
   totalProducts: number
@@ -22,28 +23,10 @@ type CategoryPoint = {
 type BootstrapResponse = {
   products: Product[]
   movements: Movement[]
+  users: import('../types').User[]
   dashboard: DashboardSummary
   monthlyPurchases: ChartPoint[]
   categoryDistribution: CategoryPoint[]
-}
-
-const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? ''
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-    ...init,
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Falha ao processar a requisição.' }))
-    throw new Error(error.detail ?? 'Falha ao processar a requisição.')
-  }
-
-  return response.json()
 }
 
 export function useStore() {
@@ -77,8 +60,9 @@ export function useStore() {
   }, [])
 
   const saveProduct = async (product: Product) => {
-    const method = product.id ? 'PUT' : 'POST'
-    const path = product.id ? `/api/products/${product.id}` : '/api/products'
+    const hasId = products.some((entry) => entry.id === product.id)
+    const method = hasId ? 'PUT' : 'POST'
+    const path = hasId ? `/api/products/${product.id}` : '/api/products'
     await apiFetch<Product>(path, {
       method,
       body: JSON.stringify(product),

@@ -2,6 +2,7 @@ import { StockOutForm } from '../components/forms/StockOutForm'
 import { DataTable } from '../components/ui/Common'
 import { useStore } from '../hooks/useProducts'
 import { useToast } from '../hooks/useToast'
+import { ApiError } from '../lib/api'
 import { brDate, brl } from '../utils/format'
 
 export function StockOut() {
@@ -9,8 +10,12 @@ export function StockOut() {
   const { push } = useToast()
 
   const handleStockOut = async (d: any) => {
-    await stockOut(d)
-    push('Saída registrada com sucesso.')
+    try {
+      await stockOut(d)
+      push('Saída registrada com sucesso.', 'success')
+    } catch (stockError) {
+      push(stockError instanceof ApiError ? stockError.message : 'Falha ao registrar saída.', 'error')
+    }
   }
 
   if (loading) {

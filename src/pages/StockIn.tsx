@@ -2,6 +2,7 @@ import { StockInForm } from '../components/forms/StockInForm'
 import { DataTable } from '../components/ui/Common'
 import { useStore } from '../hooks/useProducts'
 import { useToast } from '../hooks/useToast'
+import { ApiError } from '../lib/api'
 import { brDate, brl } from '../utils/format'
 
 export function StockIn() {
@@ -9,8 +10,12 @@ export function StockIn() {
   const { push } = useToast()
 
   const handleStockIn = async (d: any) => {
-    await stockIn(d)
-    push('Entrada registrada com sucesso.')
+    try {
+      await stockIn(d)
+      push('Entrada registrada com sucesso.', 'success')
+    } catch (stockError) {
+      push(stockError instanceof ApiError ? stockError.message : 'Falha ao registrar entrada.', 'error')
+    }
   }
 
   if (loading) {

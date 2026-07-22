@@ -5,17 +5,25 @@ import { Badge, StatusBadge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { ProductForm } from '../components/forms/ProductForm'
 import { useStore } from '../hooks/useProducts'
+import { useToast } from '../hooks/useToast'
+import { ApiError } from '../lib/api'
 import { brl } from '../utils/format'
 
 export function Products() {
   const { products, saveProduct, loading, error } = useStore()
+  const { push } = useToast()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
 
   const handleSave = async (product: any) => {
-    await saveProduct(product)
-    setIsModalOpen(false)
-    setSelectedProduct(null)
+    try {
+      await saveProduct(product)
+      setIsModalOpen(false)
+      setSelectedProduct(null)
+      push('Produto salvo com sucesso.', 'success')
+    } catch (saveError) {
+      push(saveError instanceof ApiError ? saveError.message : 'Falha ao salvar produto.', 'error')
+    }
   }
 
   if (loading) {

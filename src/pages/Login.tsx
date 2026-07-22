@@ -1,15 +1,30 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Boxes, CheckCircle2, ShieldCheck, BarChart3, Users, Shield } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../hooks/useToast'
+import { ApiError } from '../lib/api'
 
 export function Login() {
   const navigate = useNavigate()
+  const { login } = useAuth()
+  const { push } = useToast()
   const [email, setEmail] = useState('washington@stockflow.pro')
   const [password, setPassword] = useState('password123')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    navigate('/dashboard')
+    setIsSubmitting(true)
+    try {
+      await login(email, password)
+      push('Login realizado com sucesso.', 'success')
+      navigate('/dashboard')
+    } catch (error) {
+      push(error instanceof ApiError ? error.message : 'Falha ao realizar login.', 'error')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -75,9 +90,10 @@ export function Login() {
 
             <button
               type="submit"
+              disabled={isSubmitting}
               className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-600/30 hover:bg-blue-700 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
             >
-              Entrar no Sistema
+              {isSubmitting ? 'Entrando...' : 'Entrar no Sistema'}
             </button>
           </form>
 

@@ -1,183 +1,35 @@
-import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+import jwt
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-
-BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent
-DATA_DIR = BASE_DIR / "data"
-STORE_FILE = DATA_DIR / "store.json"
-DIST_DIR = PROJECT_ROOT / "dist"
-ASSETS_DIR = DIST_DIR / "assets"
-
-
-DEFAULT_STORE = {
-    "products": [
-        {
-            "id": "1",
-            "code": "INF-001",
-            "name": "Cabo de Rede CAT6",
-            "category": "Informática",
-            "unit": "Metro",
-            "quantity": 150,
-            "minStock": 50,
-            "maxStock": 500,
-            "cost": 2.5,
-            "salePrice": 5.0,
-            "supplier": "Tech Distribuidora",
-            "location": "Prateleira A1",
-            "status": "Ativo",
-        },
-        {
-            "id": "2",
-            "code": "INF-002",
-            "name": "Mouse Sem Fio",
-            "category": "Informática",
-            "unit": "Unidade",
-            "quantity": 15,
-            "minStock": 20,
-            "maxStock": 100,
-            "cost": 45.0,
-            "salePrice": 89.9,
-            "supplier": "Tech Distribuidora",
-            "location": "Prateleira A2",
-            "status": "Ativo",
-        },
-        {
-            "id": "3",
-            "code": "ESC-001",
-            "name": "Papel A4",
-            "category": "Escritório",
-            "unit": "Pacote",
-            "quantity": 45,
-            "minStock": 10,
-            "maxStock": 200,
-            "cost": 22.0,
-            "salePrice": 35.0,
-            "supplier": "Office Center",
-            "location": "Armário B1",
-            "status": "Ativo",
-        },
-        {
-            "id": "4",
-            "code": "ESC-002",
-            "name": "Toner Impressora HP",
-            "category": "Escritório",
-            "unit": "Unidade",
-            "quantity": 4,
-            "minStock": 5,
-            "maxStock": 20,
-            "cost": 180.0,
-            "salePrice": 250.0,
-            "supplier": "Office Center",
-            "location": "Armário B2",
-            "status": "Ativo",
-        },
-        {
-            "id": "5",
-            "code": "LIM-001",
-            "name": "Álcool 70%",
-            "category": "Limpeza",
-            "unit": "Litro",
-            "quantity": 30,
-            "minStock": 10,
-            "maxStock": 50,
-            "cost": 8.5,
-            "salePrice": 15.0,
-            "supplier": "LimpaMais",
-            "location": "Depósito C1",
-            "status": "Ativo",
-        },
-        {
-            "id": "6",
-            "code": "MAN-001",
-            "name": "Lâmpada LED 12W",
-            "category": "Manutenção",
-            "unit": "Unidade",
-            "quantity": 0,
-            "minStock": 10,
-            "maxStock": 100,
-            "cost": 12.0,
-            "salePrice": 22.0,
-            "supplier": "Eletro Norte",
-            "location": "Prateleira D1",
-            "status": "Ativo",
-        },
-    ],
-    "movements": [
-        {
-            "id": "m1",
-            "date": datetime.now(timezone.utc).isoformat(),
-            "type": "Entrada",
-            "productId": "1",
-            "productName": "Cabo de Rede CAT6",
-            "code": "INF-001",
-            "category": "Informática",
-            "quantity": 100,
-            "value": 250.0,
-            "originDestiny": "Tech Distribuidora",
-            "responsible": "Washington Araújo",
-            "status": "Concluido",
-        },
-        {
-            "id": "m2",
-            "date": datetime.now(timezone.utc).isoformat(),
-            "type": "Saida",
-            "productId": "2",
-            "productName": "Mouse Sem Fio",
-            "code": "INF-002",
-            "category": "Informática",
-            "quantity": 5,
-            "value": 225.0,
-            "originDestiny": "Setor de TI",
-            "responsible": "Washington Araújo",
-            "status": "Concluido",
-        },
-    ],
-}
-
-
-class ProductPayload(BaseModel):
-    id: str | None = None
-    code: str
-    name: str
-    category: str
-    unit: str
-    quantity: int = Field(ge=0)
-    minStock: int = Field(ge=0)
-    maxStock: int = Field(ge=0)
-    cost: float = Field(ge=0)
-    salePrice: float = Field(ge=0)
-    supplier: str
-    location: str
-    status: Literal["Ativo", "Inativo"]
-    observations: str | None = None
-
-
-class StockInPayload(BaseModel):
-    productId: str
-    quantity: int = Field(gt=0)
-    cost: float = Field(ge=0)
-    supplier: str
-
-
-class StockOutPayload(BaseModel):
-    productId: str
-    quantity: int = Field(gt=0)
-    sector: str
+from .database import Base, SessionLocal, engine
+from .models import Movement, Product, User
+from .schemas import (
+    LoginPayload,
+    LoginResponse,
+    PasswordChangePayload,
+    ProductPayload,
+    ProfileUpdatePayload,
+    StockInPayload,
+    StockOutPayload,
+    UserCreatePayload,
+    UserResponse,
+    UserUpdatePayload,
+)
+from .security import create_access_token, decode_access_token, hash_password, verify_password
+from .seed import seed_database
 
 
 app = FastAPI(
     title="StockFlowPro Web",
-    version="0.2.0",
+    version="0.3.0",
     description="API em Python para apoiar a versao web do StockFlowPro.",
 )
 
@@ -189,28 +41,77 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-def ensure_store() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if not STORE_FILE.exists():
-        STORE_FILE.write_text(json.dumps(DEFAULT_STORE, ensure_ascii=False, indent=2), encoding="utf-8")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DIST_DIR = PROJECT_ROOT / "dist"
+ASSETS_DIR = DIST_DIR / "assets"
 
 
-def load_store() -> dict:
-    ensure_store()
-    return json.loads(STORE_FILE.read_text(encoding="utf-8"))
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
-def save_store(store: dict) -> None:
-    STORE_FILE.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
+def serialize_user(user: User) -> dict:
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "job": user.job,
+        "role": user.role,
+        "status": user.status,
+        "lastAccess": user.last_access.isoformat(),
+        "createdAt": user.created_at.isoformat(),
+        "permissions": user.permissions or [],
+        "avatar": user.avatar,
+    }
 
 
-def compute_dashboard(products: list[dict]) -> dict[str, int | float]:
+def serialize_product(product: Product) -> dict:
+    return {
+        "id": product.id,
+        "code": product.code,
+        "name": product.name,
+        "category": product.category,
+        "unit": product.unit,
+        "quantity": product.quantity,
+        "minStock": product.min_stock,
+        "maxStock": product.max_stock,
+        "cost": product.cost,
+        "salePrice": product.sale_price,
+        "supplier": product.supplier,
+        "location": product.location,
+        "status": product.status,
+        "observations": product.observations,
+    }
+
+
+def serialize_movement(movement: Movement) -> dict:
+    return {
+        "id": movement.id,
+        "date": movement.date.isoformat(),
+        "type": movement.type,
+        "productId": movement.product_id,
+        "productName": movement.product_name,
+        "code": movement.code,
+        "category": movement.category,
+        "quantity": movement.quantity,
+        "value": movement.value,
+        "originDestiny": movement.origin_destiny,
+        "responsible": movement.responsible,
+        "status": movement.status,
+        "observations": movement.observations,
+    }
+
+
+def compute_dashboard(products: list[Product]) -> dict[str, int | float]:
     total_products = len(products)
-    low_stock = sum(1 for product in products if product["quantity"] <= product["minStock"])
-    total_items = sum(product["quantity"] for product in products)
-    stock_value = sum(product["quantity"] * product["cost"] for product in products)
-    active_products = sum(1 for product in products if product["status"] == "Ativo")
+    low_stock = sum(1 for product in products if product.quantity <= product.min_stock)
+    total_items = sum(product.quantity for product in products)
+    stock_value = sum(product.quantity * product.cost for product in products)
+    active_products = sum(1 for product in products if product.status == "Ativo")
     return {
         "totalProducts": total_products,
         "lowStockProducts": low_stock,
@@ -220,48 +121,75 @@ def compute_dashboard(products: list[dict]) -> dict[str, int | float]:
     }
 
 
-def compute_category_distribution(products: list[dict]) -> list[dict[str, int | str]]:
+def compute_category_distribution(products: list[Product]) -> list[dict[str, int | str]]:
     categories: dict[str, int] = {}
     for product in products:
-        categories[product["category"]] = categories.get(product["category"], 0) + product["quantity"]
+        categories[product.category] = categories.get(product.category, 0) + product.quantity
     return [{"name": name, "value": value} for name, value in categories.items()]
 
 
-def compute_monthly_purchases(movements: list[dict]) -> list[dict[str, int | str | float]]:
+def compute_monthly_purchases(movements: list[Movement]) -> list[dict[str, int | str | float]]:
     month_names = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
     month_totals: dict[int, float] = {}
-
     for movement in movements:
-        if movement["type"] != "Entrada":
+        if movement.type != "Entrada":
             continue
-        movement_date = datetime.fromisoformat(movement["date"].replace("Z", "+00:00"))
-        month_totals[movement_date.month] = month_totals.get(movement_date.month, 0) + movement["value"]
+        month_totals[movement.date.month] = month_totals.get(movement.date.month, 0) + movement.value
 
     current_month = datetime.now(timezone.utc).month
     months = [((current_month - offset - 1) % 12) + 1 for offset in range(5, -1, -1)]
-    return [
-        {"month": month_names[month - 1], "value": round(month_totals.get(month, 0), 2)}
-        for month in months
-    ]
+    return [{"month": month_names[month - 1], "value": round(month_totals.get(month, 0), 2)} for month in months]
 
 
-def build_bootstrap(store: dict) -> dict:
-    products = store["products"]
-    movements = store["movements"]
+def build_bootstrap(db: Session) -> dict:
+    products = db.query(Product).order_by(Product.name.asc()).all()
+    movements = db.query(Movement).order_by(Movement.date.desc()).all()
+    users = db.query(User).order_by(User.name.asc()).all()
     return {
-        "products": products,
-        "movements": movements,
+        "products": [serialize_product(product) for product in products],
+        "movements": [serialize_movement(movement) for movement in movements],
+        "users": [serialize_user(user) for user in users],
         "dashboard": compute_dashboard(products),
         "monthlyPurchases": compute_monthly_purchases(movements),
         "categoryDistribution": compute_category_distribution(products),
     }
 
 
-def get_product_or_404(store: dict, product_id: str) -> dict:
-    for product in store["products"]:
-        if product["id"] == product_id:
-            return product
-    raise HTTPException(status_code=404, detail="Produto nao encontrado.")
+def require_user(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> User:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Sessao nao autenticada.")
+
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        payload = decode_access_token(token)
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail="Token invalido.") from exc
+
+    user = db.get(User, payload.get("sub"))
+    if not user or user.status != "Ativo":
+        raise HTTPException(status_code=401, detail="Usuario nao autorizado.")
+    return user
+
+
+def get_product_or_404(db: Session, product_id: str) -> Product:
+    product = db.get(Product, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Produto nao encontrado.")
+    return product
+
+
+def get_user_or_404(db: Session, user_id: str) -> User:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario nao encontrado.")
+    return user
+
+
+@app.on_event("startup")
+def startup() -> None:
+    Base.metadata.create_all(bind=engine)
+    with SessionLocal() as session:
+        seed_database(session)
 
 
 @app.get("/api/health")
@@ -269,100 +197,215 @@ def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/api/auth/login", response_model=LoginResponse)
+def login(payload: LoginPayload, db: Session = Depends(get_db)) -> dict:
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="E-mail ou senha invalidos.")
+
+    user.last_access = datetime.now(timezone.utc)
+    db.commit()
+    return {"accessToken": create_access_token(user.id), "user": serialize_user(user)}
+
+
+@app.get("/api/auth/me", response_model=UserResponse)
+def me(current_user: User = Depends(require_user)) -> dict:
+    return serialize_user(current_user)
+
+
+@app.post("/api/auth/change-password")
+def change_password(payload: PasswordChangePayload, current_user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    if not verify_password(payload.currentPassword, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Senha atual incorreta.")
+    current_user.password_hash = hash_password(payload.newPassword)
+    db.commit()
+    return {"message": "Senha atualizada com sucesso."}
+
+
 @app.get("/api/bootstrap")
-def bootstrap() -> dict:
-    return build_bootstrap(load_store())
+def bootstrap(_: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    return build_bootstrap(db)
 
 
 @app.get("/api/products")
-def list_products() -> list[dict]:
-    return load_store()["products"]
+def list_products(_: User = Depends(require_user), db: Session = Depends(get_db)) -> list[dict]:
+    return [serialize_product(product) for product in db.query(Product).order_by(Product.name.asc()).all()]
 
 
 @app.get("/api/movements")
-def list_movements() -> list[dict]:
-    return load_store()["movements"]
+def list_movements(_: User = Depends(require_user), db: Session = Depends(get_db)) -> list[dict]:
+    return [serialize_movement(movement) for movement in db.query(Movement).order_by(Movement.date.desc()).all()]
+
+
+@app.get("/api/users")
+def list_users(_: User = Depends(require_user), db: Session = Depends(get_db)) -> list[dict]:
+    return [serialize_user(user) for user in db.query(User).order_by(User.name.asc()).all()]
 
 
 @app.get("/api/dashboard")
-def dashboard_summary() -> dict[str, int | float]:
-    return compute_dashboard(load_store()["products"])
+def dashboard_summary(_: User = Depends(require_user), db: Session = Depends(get_db)) -> dict[str, int | float]:
+    return compute_dashboard(db.query(Product).all())
 
 
 @app.post("/api/products")
-def create_product(payload: ProductPayload) -> dict:
-    store = load_store()
-    product = payload.model_dump()
-    product["id"] = product["id"] or str(uuid4())
-    store["products"].insert(0, product)
-    save_store(store)
-    return product
+def create_product(payload: ProductPayload, _: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    product = Product(
+        id=payload.id or str(uuid4()),
+        code=payload.code,
+        name=payload.name,
+        category=payload.category,
+        unit=payload.unit,
+        quantity=payload.quantity,
+        min_stock=payload.minStock,
+        max_stock=payload.maxStock,
+        cost=payload.cost,
+        sale_price=payload.salePrice,
+        supplier=payload.supplier,
+        location=payload.location,
+        status=payload.status,
+        observations=payload.observations,
+    )
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    return serialize_product(product)
 
 
 @app.put("/api/products/{product_id}")
-def update_product(product_id: str, payload: ProductPayload) -> dict:
-    store = load_store()
-    product = get_product_or_404(store, product_id)
-    updated = payload.model_dump()
-    updated["id"] = product_id
-    product.update(updated)
-    save_store(store)
-    return product
+def update_product(product_id: str, payload: ProductPayload, _: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    product = get_product_or_404(db, product_id)
+    product.code = payload.code
+    product.name = payload.name
+    product.category = payload.category
+    product.unit = payload.unit
+    product.quantity = payload.quantity
+    product.min_stock = payload.minStock
+    product.max_stock = payload.maxStock
+    product.cost = payload.cost
+    product.sale_price = payload.salePrice
+    product.supplier = payload.supplier
+    product.location = payload.location
+    product.status = payload.status
+    product.observations = payload.observations
+    db.commit()
+    db.refresh(product)
+    return serialize_product(product)
+
+
+@app.post("/api/users")
+def create_user(payload: UserCreatePayload, _: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    if db.query(User).filter(User.email == payload.email).first():
+        raise HTTPException(status_code=400, detail="Ja existe usuario com esse e-mail.")
+
+    user = User(
+        id=payload.id or str(uuid4()),
+        name=payload.name,
+        email=str(payload.email),
+        job=payload.job,
+        role=payload.role,
+        status=payload.status,
+        created_at=datetime.now(timezone.utc),
+        last_access=datetime.now(timezone.utc),
+        permissions=payload.permissions,
+        avatar=payload.avatar,
+        password_hash=hash_password(payload.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return serialize_user(user)
+
+
+@app.put("/api/users/{user_id}")
+def update_user(user_id: str, payload: UserUpdatePayload, _: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    user = get_user_or_404(db, user_id)
+    conflict = db.query(User).filter(User.email == payload.email, User.id != user_id).first()
+    if conflict:
+        raise HTTPException(status_code=400, detail="Ja existe usuario com esse e-mail.")
+
+    user.name = payload.name
+    user.email = str(payload.email)
+    user.job = payload.job
+    user.role = payload.role
+    user.status = payload.status
+    user.permissions = payload.permissions
+    user.avatar = payload.avatar
+    if payload.password:
+        user.password_hash = hash_password(payload.password)
+    db.commit()
+    db.refresh(user)
+    return serialize_user(user)
+
+
+@app.put("/api/profile")
+def update_profile(payload: ProfileUpdatePayload, current_user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    conflict = db.query(User).filter(User.email == payload.email, User.id != current_user.id).first()
+    if conflict:
+        raise HTTPException(status_code=400, detail="Ja existe usuario com esse e-mail.")
+
+    current_user.name = payload.name
+    current_user.email = str(payload.email)
+    current_user.job = payload.job
+    current_user.avatar = payload.avatar
+    db.commit()
+    db.refresh(current_user)
+    return serialize_user(current_user)
 
 
 @app.post("/api/movements/stock-in")
-def stock_in(payload: StockInPayload) -> dict:
-    store = load_store()
-    product = get_product_or_404(store, payload.productId)
-    product["quantity"] += payload.quantity
-    product["cost"] = payload.cost
-    product["supplier"] = payload.supplier
+def stock_in(payload: StockInPayload, current_user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    product = get_product_or_404(db, payload.productId)
+    product.quantity += payload.quantity
+    product.cost = payload.cost
+    product.supplier = payload.supplier
 
-    movement = {
-        "id": str(uuid4()),
-        "date": datetime.now(timezone.utc).isoformat(),
-        "type": "Entrada",
-        "productId": product["id"],
-        "productName": product["name"],
-        "code": product["code"],
-        "category": product["category"],
-        "quantity": payload.quantity,
-        "value": round(payload.quantity * payload.cost, 2),
-        "originDestiny": payload.supplier,
-        "responsible": "Washington Araújo",
-        "status": "Concluido",
-    }
-    store["movements"].insert(0, movement)
-    save_store(store)
-    return {"product": product, "movement": movement, "dashboard": compute_dashboard(store["products"])}
+    movement = Movement(
+        id=str(uuid4()),
+        date=datetime.now(timezone.utc),
+        type="Entrada",
+        product_id=product.id,
+        product_name=product.name,
+        code=product.code,
+        category=product.category,
+        quantity=payload.quantity,
+        value=round(payload.quantity * payload.cost, 2),
+        origin_destiny=payload.supplier,
+        responsible=current_user.name,
+        status="Concluido",
+    )
+    db.add(movement)
+    db.commit()
+    db.refresh(product)
+    db.refresh(movement)
+    return {"product": serialize_product(product), "movement": serialize_movement(movement)}
 
 
 @app.post("/api/movements/stock-out")
-def stock_out(payload: StockOutPayload) -> dict:
-    store = load_store()
-    product = get_product_or_404(store, payload.productId)
-
-    if payload.quantity > product["quantity"]:
+def stock_out(payload: StockOutPayload, current_user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    product = get_product_or_404(db, payload.productId)
+    if payload.quantity > product.quantity:
         raise HTTPException(status_code=400, detail="Quantidade indisponivel em estoque.")
 
-    product["quantity"] -= payload.quantity
-    movement = {
-        "id": str(uuid4()),
-        "date": datetime.now(timezone.utc).isoformat(),
-        "type": "Saida",
-        "productId": product["id"],
-        "productName": product["name"],
-        "code": product["code"],
-        "category": product["category"],
-        "quantity": payload.quantity,
-        "value": round(payload.quantity * product["cost"], 2),
-        "originDestiny": payload.sector,
-        "responsible": "Washington Araújo",
-        "status": "Concluido",
-    }
-    store["movements"].insert(0, movement)
-    save_store(store)
-    return {"product": product, "movement": movement, "dashboard": compute_dashboard(store["products"])}
+    product.quantity -= payload.quantity
+    movement = Movement(
+        id=str(uuid4()),
+        date=datetime.now(timezone.utc),
+        type="Saida",
+        product_id=product.id,
+        product_name=product.name,
+        code=product.code,
+        category=product.category,
+        quantity=payload.quantity,
+        value=round(payload.quantity * product.cost, 2),
+        origin_destiny=payload.sector,
+        responsible=current_user.name,
+        status="Concluido",
+    )
+    db.add(movement)
+    db.commit()
+    db.refresh(product)
+    db.refresh(movement)
+    return {"product": serialize_product(product), "movement": serialize_movement(movement)}
 
 
 if ASSETS_DIR.exists():

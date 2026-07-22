@@ -2,11 +2,13 @@ import React, { useState, useRef } from 'react'
 import { Camera, Save, Lock, ChevronRight, CheckCircle2, User as UserIcon, Shield, Mail, Briefcase } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../hooks/useToast'
+import { apiFetch, ApiError } from '../lib/api'
 
 export function Profile() {
   const { user, updateUser } = useAuth()
   const { push } = useToast()
   const [isSaving, setIsSaving] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
@@ -14,20 +16,31 @@ export function Profile() {
     email: user?.email || '',
     job: user?.job || '',
   })
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '' })
 
   if (!user) return null
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true)
-    setTimeout(() => {
-      updateUser({
-        name: formData.name,
-        email: formData.email,
-        job: formData.job
+    try {
+      const updatedUser = await apiFetch<typeof user>('/api/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          job: formData.job,
+          avatar: user.avatar,
+        }),
       })
-      setIsSaving(false)
+      updateUser({
+        ...updatedUser,
+      })
       push('Perfil atualizado com sucesso!', 'success')
-    }, 1000)
+    } catch (error) {
+      push(error instanceof ApiError ? error.message : 'Falha ao atualizar perfil.', 'error')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleAvatarClick = () => {
@@ -43,6 +56,22 @@ export function Profile() {
         push('Foto de perfil atualizada!', 'success')
       }
       reader.readAsDataURL(file)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    setIsChangingPassword(true)
+    try {
+      await apiFetch('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify(passwordData),
+      })
+      setPasswordData({ currentPassword: '', newPassword: '' })
+      push('Senha atualizada com sucesso!', 'success')
+    } catch (error) {
+      push(error instanceof ApiError ? error.message : 'Falha ao atualizar senha.', 'error')
+    } finally {
+      setIsChangingPassword(false)
     }
   }
 
@@ -171,9 +200,9 @@ export function Profile() {
             </div>
 
             <div className="grid gap-4">
-              <button className="w-full flex items-center justify-between p-6 rounded-[2rem] bg-slate-50 border border-slate-100 group hover:border-blue-200 hover:bg-blue-50/30 transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400 group-hover:text-blue-500 transition-colors">
+              <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-sm text-slate-400">
                     <Lock className="h-5 w-5" />
                   </div>
                   <div className="text-left">
@@ -181,8 +210,14 @@ export function Profile() {
                     <p className="text-xs text-slate-500 font-medium">Atualize sua senha de acesso periodicamente.</p>
                   </div>
                 </div>
-                <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-blue-400 transition-all" />
-              </button>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <input type="password" value={passwordData.currentPassword} onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })} className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-bold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50" placeholder="Senha atual" />
+                  <input type="password" value={passwordData.newPassword} onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })} className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-bold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50" placeholder="Nova senha" />
+                </div>
+                <button onClick={handleChangePassword} disabled={isChangingPassword || !passwordData.currentPassword || passwordData.newPassword.length < 6} className="mt-4 w-full rounded-2xl bg-slate-900 px-5 py-4 text-sm font-black text-white transition-all disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">
+                  {isChangingPassword ? 'Atualizando senha...' : 'ATUALIZAR SENHA'}
+                </button>
+              </div>
 
               <button className="w-full flex items-center justify-between p-6 rounded-[2rem] bg-slate-50 border border-slate-100 group hover:border-emerald-200 hover:bg-emerald-50/30 transition-all">
                 <div className="flex items-center gap-4">

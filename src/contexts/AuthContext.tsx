@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import type { User } from '../types'
-import { mockUsers } from '../data/users'
+import { ApiError, apiFetch, clearToken, setToken } from '../lib/api'
 
 interface AuthContextType {
   user: User | null
+  loading: boolean
+  login: (email: string, password: string) => Promise<void>
   updateUser: (userData: Partial<User>) => void
   logout: () => void
 }
@@ -12,21 +14,34 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('stockflow_user')
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
-    } else {
-      // Usar o primeiro usuário mock como padrão para demonstração
-      const initialUser = {
-        ...mockUsers[0],
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'
-      }
-      setUser(initialUser)
-      localStorage.setItem('stockflow_user', JSON.stringify(initialUser))
-    }
+    apiFetch<User>('/api/auth/me')
+      .then((currentUser) => {
+        setUser(currentUser)
+        localStorage.setItem('stockflow_user', JSON.stringify(currentUser))
+      })
+      .catch((error) => {
+        if (!(error instanceof ApiError) || error.status !== 401) {
+          console.error(error)
+        }
+        clearToken()
+        localStorage.removeItem('stockflow_user')
+        setUser(null)
+      })
+      .finally(() => setLoading(false))
   }, [])
+
+  const login = async (email: string, password: string) => {
+    const result = await apiFetch<{ accessToken: string; user: User }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    })
+    setToken(result.accessToken)
+    setUser(result.user)
+    localStorage.setItem('stockflow_user', JSON.stringify(result.user))
+  }
 
   const updateUser = (userData: Partial<User>) => {
     setUser((prev) => {
@@ -39,12 +54,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     setUser(null)
+    clearToken()
     localStorage.removeItem('stockflow_user')
     window.location.href = '/login'
   }
 
   return (
-    <AuthContext.Provider value={{ user, updateUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   )

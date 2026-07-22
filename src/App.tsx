@@ -12,6 +12,7 @@ import { Users } from './pages/Users'
 import { Settings } from './pages/Settings'
 import { Profile } from './pages/Profile'
 import { DashboardLayout } from './components/layout/DashboardLayout'
+import { RequireAuth } from './components/auth/RequireAuth'
 import { AuthProvider } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
 
@@ -24,7 +25,7 @@ export function App() {
         <Route path="/" element={<AccessLevels />} />
         <Route path="/login" element={<Login />} />
         
-        <Route element={<DashboardLayout />}>
+        <Route element={<RequireAuth><DashboardLayout /></RequireAuth>}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/produtos" element={<Products />} />
           <Route path="/entrada" element={<StockIn />} />

@@ -2,6 +2,8 @@
 
 Base web do projeto com frontend React/Vite e backend Python com FastAPI.
 
+Agora o backend suporta autenticacao real com JWT e persistencia em banco via SQLAlchemy.
+
 ## Requisitos
 
 - Node.js
@@ -45,6 +47,11 @@ python -m uvicorn backend.main:app --reload
 
 Se quiser apontar o frontend para outra API, crie um arquivo `.env` baseado em `.env.example`.
 
+Credenciais iniciais de demonstracao:
+
+- `washington@stockflow.pro`
+- `password123`
+
 ## Endpoints iniciais
 
 - `GET /api/health`
@@ -57,7 +64,14 @@ Se quiser apontar o frontend para outra API, crie um arquivo `.env` baseado em `
 - `POST /api/movements/stock-in`
 - `POST /api/movements/stock-out`
 
-Os dados iniciais ficam em `backend/data/store.json`.
+Os dados iniciais sao semeados automaticamente no banco na primeira inicializacao.
+
+Para execucao local sem configurar Postgres, o sistema usa SQLite automaticamente em `backend/data/stockflow.db`.
+
+Para producao no Render, defina:
+
+- `DATABASE_URL`: URL do PostgreSQL do Render
+- `SECRET_KEY`: chave secreta forte para JWT
 
 ## Deploy com Docker
 
@@ -74,6 +88,16 @@ docker run -p 8000:8000 stockflowpro
 ```
 
 Esse container ja publica o backend Python e serve o frontend compilado no mesmo endereco.
+
+## PostgreSQL no Render
+
+1. No Render, crie um banco `PostgreSQL`
+2. Copie a `External Database URL`
+3. No Web Service do app, adicione a variavel `DATABASE_URL`
+4. Adicione tambem `SECRET_KEY` com um valor longo e privado
+5. Rode um novo deploy
+
+Na primeira subida com banco vazio, a API cria as tabelas e carrega os dados iniciais automaticamente.
 
 ## Publicacao no Git remoto
 

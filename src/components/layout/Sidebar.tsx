@@ -15,6 +15,7 @@ import {
   Zap,
   LogOut
 } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 const menuGroups = [
   {
@@ -56,6 +57,8 @@ const menuGroups = [
 ]
 
 export function Sidebar() {
+  const { logout } = useAuth()
+
   return (
     <aside className="h-screen w-72 bg-slate-900 text-white flex flex-col shrink-0 z-50">
       <div className="p-8">
@@ -79,24 +82,23 @@ export function Sidebar() {
               {group.title}
             </h3>
             <div className="space-y-1">
-              {group.items.map((item) => (
+              {group.items.map((item) => item.isLogout ? (
+                <button key={item.path} onClick={logout} className="flex w-full items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group text-rose-400 hover:bg-rose-500/10 hover:text-rose-300">
+                  <item.icon className="h-5 w-5 transition-transform group-hover:scale-110 text-rose-500" />
+                  <span className="text-sm font-bold tracking-tight">{item.label}</span>
+                </button>
+              ) : (
                 <NavLink
                   key={item.path}
                   to={item.path}
                   className={({ isActive }) => `
                     flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group
-                    ${item.isLogout 
-                      ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300' 
-                      : isActive 
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
-                        : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}
+                    ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}
                   `}
                 >
-                  <item.icon className={`h-5 w-5 transition-transform group-hover:scale-110 ${item.isLogout ? 'text-rose-500' : ''}`} />
+                  <item.icon className="h-5 w-5 transition-transform group-hover:scale-110" />
                   <span className="text-sm font-bold tracking-tight">{item.label}</span>
-                  {item.path === '/financeiro' && (
-                    <span className="ml-auto h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
-                  )}
+                  {item.path === '/financeiro' && <span className="ml-auto h-2 w-2 rounded-full bg-blue-400 animate-pulse" />}
                 </NavLink>
               ))}
             </div>
