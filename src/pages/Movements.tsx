@@ -3,7 +3,15 @@ import { useStore } from '../hooks/useProducts'
 import { brDate, brl } from '../utils/format'
 
 export function Movements() {
-  const { movements } = useStore()
+  const { movements, loading, error } = useStore()
+
+  if (loading) {
+    return <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm font-medium text-slate-500">Carregando movimentações...</div>
+  }
+
+  if (error) {
+    return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm font-medium text-rose-700">{error}</div>
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">

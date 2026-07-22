@@ -7,16 +7,22 @@ import { StatCard } from '../components/cards/StatCard'
 import { ChartCard } from '../components/cards/ChartCard'
 import { useStore } from '../hooks/useProducts'
 import { brl } from '../utils/format'
-import { monthlyPurchases, categoryDistribution } from '../data/financial'
 
 const COLORS = ['#2563eb', '#7c3aed', '#10b981', '#f59e0b', '#ef4444']
 
 export function Dashboard() {
-  const { products, movements } = useStore()
+  const { products, dashboard, monthlyPurchases, categoryDistribution, loading, error } = useStore()
   
   const totalStockValue = products.reduce((acc, curr) => acc + (curr.quantity * curr.cost), 0)
-  const lowStockItems = products.filter(p => p.quantity <= p.minStock).length
-  const activeProducts = products.filter(p => p.status === 'Ativo').length
+  const lowStockItems = dashboard.lowStockProducts
+
+  if (loading) {
+    return <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm font-medium text-slate-500">Carregando dados do painel...</div>
+  }
+
+  if (error) {
+    return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm font-medium text-rose-700">{error}</div>
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -66,7 +72,7 @@ export function Dashboard() {
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total de Produtos" value={products.length.toString()} change={12} icon={Package} variant="primary" />
+        <StatCard title="Total de Produtos" value={dashboard.totalProducts.toString()} change={12} icon={Package} variant="primary" />
         <StatCard title="Estoque Baixo" value={lowStockItems.toString()} change={-2} icon={AlertTriangle} variant="warning" />
         <StatCard title="Valor em Estoque" value={brl(totalStockValue)} change={5.4} icon={DollarSign} variant="success" />
         <StatCard title="Custo de Compras" value={brl(64900)} change={8.2} icon={ShoppingCart} variant="danger" />

@@ -3,13 +3,20 @@ import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recha
 import { ChartCard } from '../components/cards/ChartCard'
 import { StatCard } from '../components/cards/StatCard'
 import { DataTable } from '../components/ui/Common'
-import { monthlyPurchases } from '../data/financial'
 import { useStore } from '../hooks/useProducts'
 import { brl } from '../utils/format'
 
 export function Finance() {
-  const { products } = useStore()
+  const { products, monthlyPurchases, loading, error } = useStore()
   const total = products.reduce((a, p) => a + p.quantity * p.cost, 0)
+
+  if (loading) {
+    return <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm font-medium text-slate-500">Carregando financeiro...</div>
+  }
+
+  if (error) {
+    return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm font-medium text-rose-700">{error}</div>
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

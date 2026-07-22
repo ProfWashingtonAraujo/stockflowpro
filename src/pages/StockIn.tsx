@@ -5,15 +5,20 @@ import { useToast } from '../hooks/useToast'
 import { brDate, brl } from '../utils/format'
 
 export function StockIn() {
-  const { products, setProducts, movements, setMovements } = useStore()
+  const { products, movements, stockIn, loading, error } = useStore()
   const { push } = useToast()
 
-  const handleStockIn = (d: any) => {
-    const pr = products.find((p) => p.id === d.productId)
-    if (!pr) return
-    setProducts((prev) => prev.map((p) => (p.id === d.productId ? { ...p, quantity: p.quantity + d.quantity } : p)))
-    setMovements((prev) => [{ id: crypto.randomUUID(), date: new Date().toISOString(), type: 'Entrada', productId: pr.id, productName: pr.name, code: pr.code, category: pr.category, quantity: d.quantity, value: d.quantity * d.cost, originDestiny: d.supplier, responsible: 'Washington Araújo', status: 'Concluido' }, ...prev])
+  const handleStockIn = async (d: any) => {
+    await stockIn(d)
     push('Entrada registrada com sucesso.')
+  }
+
+  if (loading) {
+    return <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm font-medium text-slate-500">Carregando entradas...</div>
+  }
+
+  if (error) {
+    return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm font-medium text-rose-700">{error}</div>
   }
 
   return (

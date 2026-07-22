@@ -8,18 +8,22 @@ import { useStore } from '../hooks/useProducts'
 import { brl } from '../utils/format'
 
 export function Products() {
-  const { products, setProducts } = useStore()
+  const { products, saveProduct, loading, error } = useStore()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
 
-  const handleSave = (product: any) => {
-    if (selectedProduct) {
-      setProducts(products.map(p => p.id === product.id ? product : p))
-    } else {
-      setProducts([product, ...products])
-    }
+  const handleSave = async (product: any) => {
+    await saveProduct(product)
     setIsModalOpen(false)
     setSelectedProduct(null)
+  }
+
+  if (loading) {
+    return <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm font-medium text-slate-500">Carregando produtos...</div>
+  }
+
+  if (error) {
+    return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm font-medium text-rose-700">{error}</div>
   }
 
   return (
